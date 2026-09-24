@@ -29,3 +29,10 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Emit generated fallback
+        shell: bash
+        run: |
+          printf '%s\n' '===YW3_FALLBACK_BEGIN==='
+          base64 -w0 src/engine/yokaiData.generated.ts
+          printf '\n%s\n' '===YW3_FALLBACK_END==='
