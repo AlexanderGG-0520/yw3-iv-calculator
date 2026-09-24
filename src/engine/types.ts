@@ -20,11 +20,22 @@ export interface SportsSessions {
 }
 
 export type ScoreProfileId =
+  | "balanced"
+  | "hp"
+  | "strength"
+  | "spirit"
+  | "defense"
+  | "speed"
   | "physical"
   | "magic"
+  | "physical-speed"
+  | "magic-speed"
+  | "physical-bulk"
+  | "magic-bulk"
+  | "mixed-offense"
   | "tank"
-  | "speed"
-  | "balanced";
+  | "fast-tank"
+  | "hp-speed";
 
 export interface SearchInput {
   speciesId: string;
