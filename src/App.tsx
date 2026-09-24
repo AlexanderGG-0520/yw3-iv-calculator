@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Copy, Search } from "lucide-react";
 import {
   calculateStats,
@@ -45,6 +45,8 @@ function App() {
   const [equipment, setEquipment] = useState<StatBlock>(zeroBlock);
   const [scoreProfile, setScoreProfile] = useState<ScoreProfileId>("balanced");
   const [response, setResponse] = useState<SearchResponse | null>(null);
+  const [responseFingerprint, setResponseFingerprint] = useState("");
+  const activeWorkerRef = useRef<Worker | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
@@ -71,6 +73,38 @@ function App() {
     setSpeciesId(filteredYokai[0]?.id ?? "");
     setResponse(null);
   }, [filteredYokai, speciesId]);
+
+  const searchFingerprint = useMemo(
+    () => JSON.stringify({
+      speciesId,
+      level,
+      rankUps,
+      observed,
+      sessions,
+      equipment,
+      scoreProfile,
+    }),
+    [speciesId, level, rankUps, observed, sessions, equipment, scoreProfile],
+  );
+  const visibleResponse =
+    responseFingerprint === searchFingerprint ? response : null;
+
+  useEffect(() => {
+    const worker = activeWorkerRef.current;
+    if (!worker) return;
+
+    worker.terminate();
+    activeWorkerRef.current = null;
+    setWorking(false);
+  }, [searchFingerprint]);
+
+  useEffect(
+    () => () => {
+      activeWorkerRef.current?.terminate();
+      activeWorkerRef.current = null;
+    },
+    [],
+  );
 
   const forwardSessionTotal = totalSessions(forwardSessions);
   const forwardTrainingError = useMemo(() => {
@@ -115,6 +149,7 @@ function App() {
   const runSearch = () => {
     setError("");
     setResponse(null);
+    setResponseFingerprint("");
 
     if (!speciesId) {
       setError("妖怪を選択してください。");
@@ -142,19 +177,28 @@ function App() {
     }
 
     setWorking(true);
+    const requestFingerprint = searchFingerprint;
     const worker = new Worker(new URL("./workers/reverseSearch.worker.ts", import.meta.url), { type: "module" });
+    activeWorkerRef.current = worker;
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      if (activeWorkerRef.current !== worker) return;
+
       if (event.data.ok) {
         setResponse(event.data.response);
+        setResponseFingerprint(requestFingerprint);
       } else {
         setError(event.data.error);
       }
       setWorking(false);
+      activeWorkerRef.current = null;
       worker.terminate();
     };
     worker.onerror = (event) => {
+      if (activeWorkerRef.current !== worker) return;
+
       setError(event.message || "逆算ワーカーでエラーが発生しました。");
       setWorking(false);
+      activeWorkerRef.current = null;
       worker.terminate();
     };
     worker.postMessage({
@@ -262,13 +306,13 @@ function App() {
         {error ? <p className="error">{error}</p> : null}
       </section>
 
-      {response ? (
+      {visibleResponse ? (
         <section className="summary" aria-label="検索サマリー">
-          <span>成立候補: {response.summary.validCandidateCount.toLocaleString()}</span>
-          <span>確認数: {response.summary.combinationsVisited.toLocaleString()}</span>
-          <span>{response.summary.truncated ? "安全上限で停止" : "検索完了"}</span>
+          <span>成立候補: {visibleResponse.summary.validCandidateCount.toLocaleString()}</span>
+          <span>確認数: {visibleResponse.summary.combinationsVisited.toLocaleString()}</span>
+          <span>{visibleResponse.summary.truncated ? "安全上限で停止" : "検索完了"}</span>
           {STAT_KEYS.map((stat) => (
-            <span key={stat}>{statLabel[stat]}候補: {response.summary.perStatCandidateCounts[stat]}</span>
+            <span key={stat}>{statLabel[stat]}候補: {visibleResponse.summary.perStatCandidateCounts[stat]}</span>
           ))}
         </section>
       ) : null}
@@ -278,7 +322,7 @@ function App() {
           <h2>候補</h2>
           <span className="muted">HP/2 + ちから + ようりょく + まもり + すばやさ = 40</span>
         </div>
-        <ResultCards results={response?.results ?? []} onCopy={copyResult} />
+        <ResultCards results={visibleResponse?.results ?? []} onCopy={copyResult} />
       </section>
 
       <section className="panel" aria-label="順計算">
