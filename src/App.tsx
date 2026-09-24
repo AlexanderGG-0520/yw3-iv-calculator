@@ -74,6 +74,9 @@ function App() {
 
   const forwardSessionTotal = totalSessions(forwardSessions);
   const forwardTrainingError = useMemo(() => {
+    if (!Number.isInteger(forwardLevel) || forwardLevel < 1 || forwardLevel > 99) {
+      return "レベルは1〜99の整数で入力してください。";
+    }
     if (!isValidRankUpCount(forwardRankUps)) {
       return "アゲランク回数は0〜5の整数で入力してください。開始ランクに応じた実際の上限も守ってください。";
     }
@@ -81,7 +84,7 @@ function App() {
       return "スポーツクラブは各項目0〜5の整数、4種合計5回までです。";
     }
     return "";
-  }, [forwardRankUps, forwardSessions]);
+  }, [forwardLevel, forwardRankUps, forwardSessions]);
 
   const forwardStats = useMemo(() => {
     if (!forwardSpeciesId || forwardTrainingError || !isValidIvSpread(forwardIv)) return null;
