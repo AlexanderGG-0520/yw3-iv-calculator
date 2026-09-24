@@ -36,6 +36,27 @@ describe("App", () => {
     });
   });
 
+
+  it.each([
+    ["0", "0"],
+    ["100", "100"],
+    ["小数", "1.5"],
+  ])("does not calculate forward stats for invalid level: %s", async (_label, value) => {
+    render(<App />);
+
+    const forwardRegion = screen.getByRole("region", { name: "順計算" });
+    const levelInput = within(forwardRegion).getByLabelText("レベル");
+
+    fireEvent.change(levelInput, { target: { value } });
+
+    await waitFor(() => {
+      expect(
+        within(forwardRegion).getByText("レベルは1〜99の整数で入力してください。"),
+      ).toBeDefined();
+      expect(forwardRegion.querySelector(".result-stats")).toBeNull();
+    });
+  });
+
   it("does not calculate forward stats when rank-up count exceeds five", async () => {
     render(<App />);
 
