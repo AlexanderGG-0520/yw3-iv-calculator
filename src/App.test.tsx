@@ -1,11 +1,86 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { YOKAI } from "./engine/yokaiData";
 
 describe("App", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("hides ranked results when the evaluation profile changes", async () => {
+    class MockWorker {
+      static instances: MockWorker[] = [];
+
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+
+      constructor() {
+        MockWorker.instances.push(this);
+      }
+
+      postMessage() {
+        queueMicrotask(() => {
+          this.onmessage?.({
+            data: {
+              ok: true,
+              response: {
+                results: [{
+                  id: "1",
+                  iv: { hp: 16, strength: 8, spirit: 8, defense: 8, speed: 8 },
+                  calculated: { hp: 100, strength: 100, spirit: 100, defense: 100, speed: 100 },
+                  score: 40,
+                }],
+                summary: {
+                  perStatCandidateCounts: { hp: 1, strength: 1, spirit: 1, defense: 1, speed: 1 },
+                  combinationsVisited: 1,
+                  validCandidateCount: 1,
+                  truncated: false,
+                },
+              },
+            },
+          } as MessageEvent);
+        });
+      }
+
+      terminate() {}
+    }
+
+    vi.stubGlobal("Worker", MockWorker as unknown as typeof Worker);
+
+    render(<App />);
+
+    const reverseHeading = screen.getByRole("heading", { name: "逆算" });
+    const reversePanel = reverseHeading.closest("section");
+    expect(reversePanel).not.toBeNull();
+
+    const observedHeading = within(reversePanel!).getByRole("heading", { name: "実機ステータス" });
+    const observedSection = observedHeading.closest("section");
+    expect(observedSection).not.toBeNull();
+
+    for (const label of ["HP", "ちから", "ようりょく", "まもり", "すばやさ"]) {
+      fireEvent.change(within(observedSection!).getByLabelText(label), {
+        target: { value: "1" },
+      });
+    }
+
+    fireEvent.click(within(reversePanel!).getByRole("button", { name: "逆算" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("評価スコア")).toBeDefined();
+    });
+
+    const profileSelect = within(reversePanel!).getByLabelText("評価");
+    fireEvent.change(profileSelect, { target: { value: "healer" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("評価スコア")).toBeNull();
+      expect(screen.getByText("候補はまだありません。")).toBeDefined();
+    });
+  });
+
   it("keeps speciesId synchronized with the filtered Yo-kai list", async () => {
     const defaultSpeciesId = YOKAI.find((entry) => entry.name === "ジバニャン")?.id ?? YOKAI[0]?.id ?? "";
     const alternative = YOKAI.find(
