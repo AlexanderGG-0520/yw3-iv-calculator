@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { SCORE_PROFILE_LABELS, scoreIv } from "./scoring";
+import {
+  SCORE_PROFILE_DESCRIPTIONS,
+  SCORE_PROFILE_LABELS,
+  scoreIv,
+} from "./scoring";
 import type { ScoreProfileId, StatBlock } from "./types";
 
 const balanced: StatBlock = {
@@ -11,8 +15,18 @@ const balanced: StatBlock = {
 };
 
 describe("IV scoring profiles", () => {
-  it("exposes a broad set of evaluation axes", () => {
-    expect(Object.keys(SCORE_PROFILE_LABELS)).toHaveLength(16);
+  it("exposes broad stat and battle-role evaluation axes", () => {
+    expect(Object.keys(SCORE_PROFILE_LABELS)).toHaveLength(25);
+    expect(SCORE_PROFILE_LABELS.debuffer).toBe("悪とりつき役（妨害）");
+    expect(SCORE_PROFILE_LABELS.buffer).toBe("良とりつき役（バフ）");
+    expect(SCORE_PROFILE_LABELS.healer).toBe("ヒーラー");
+    expect(SCORE_PROFILE_LABELS["passive-support"]).toBe("常駐サポート");
+  });
+
+  it("documents every scoring profile", () => {
+    for (const profile of Object.keys(SCORE_PROFILE_LABELS) as ScoreProfileId[]) {
+      expect(SCORE_PROFILE_DESCRIPTIONS[profile].length).toBeGreaterThan(0);
+    }
   });
 
   it("makes balanced scoring prefer an even weighted spread", () => {
@@ -50,6 +64,54 @@ describe("IV scoring profiles", () => {
     );
     expect(scoreIv(speedHeavy, "speed")).toBeGreaterThan(
       scoreIv(strengthHeavy, "speed"),
+    );
+    expect(scoreIv(speedHeavy, "debuffer")).toBeGreaterThan(
+      scoreIv(strengthHeavy, "debuffer"),
+    );
+  });
+
+  it("makes healer roles value spirit over irrelevant physical offense", () => {
+    const spiritHeavy: StatBlock = {
+      hp: 0,
+      strength: 0,
+      spirit: 40,
+      defense: 0,
+      speed: 0,
+    };
+    const strengthHeavy: StatBlock = {
+      hp: 0,
+      strength: 40,
+      spirit: 0,
+      defense: 0,
+      speed: 0,
+    };
+
+    expect(scoreIv(spiritHeavy, "healer")).toBeGreaterThan(
+      scoreIv(strengthHeavy, "healer"),
+    );
+    expect(scoreIv(spiritHeavy, "support-healer")).toBeGreaterThan(
+      scoreIv(strengthHeavy, "support-healer"),
+    );
+  });
+
+  it("makes passive support prefer survivability to pure speed", () => {
+    const bulky: StatBlock = {
+      hp: 40,
+      strength: 0,
+      spirit: 0,
+      defense: 20,
+      speed: 0,
+    };
+    const fast: StatBlock = {
+      hp: 0,
+      strength: 0,
+      spirit: 0,
+      defense: 0,
+      speed: 40,
+    };
+
+    expect(scoreIv(bulky, "passive-support")).toBeGreaterThan(
+      scoreIv(fast, "passive-support"),
     );
   });
 
