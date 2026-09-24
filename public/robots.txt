@@ -1,0 +1,4 @@
+# Crawling and indexing are intentionally allowed for this public site.
+# This wildcard policy also permits compliant search-engine and AI crawlers.
+User-agent: *
+Allow: /
