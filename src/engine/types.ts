@@ -35,7 +35,16 @@ export type ScoreProfileId =
   | "mixed-offense"
   | "tank"
   | "fast-tank"
-  | "hp-speed";
+  | "hp-speed"
+  | "debuffer"
+  | "buffer"
+  | "healer"
+  | "fast-healer"
+  | "bulky-healer"
+  | "reviver"
+  | "passive-support"
+  | "utility-support"
+  | "support-healer";
 
 export interface SearchInput {
   speciesId: string;

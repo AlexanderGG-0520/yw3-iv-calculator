@@ -7,7 +7,7 @@ import {
   ivWeightedTotal,
 } from "./engine/calculationEngine";
 import { fitnessFromSessions, isValidSportsSessions, totalSessions } from "./engine/fitness";
-import { SCORE_PROFILE_LABELS } from "./engine/scoring";
+import { SCORE_PROFILE_DESCRIPTIONS, SCORE_PROFILE_LABELS } from "./engine/scoring";
 import {
   STAT_KEYS,
   type ReverseResult,
@@ -237,6 +237,11 @@ function App() {
             </select>
           </label>
         </section>
+
+        <p className="muted">
+          評価基準: {SCORE_PROFILE_DESCRIPTIONS[scoreProfile]}
+          {" "}※役割適性はIV配分だけを採点し、技・とりつき・スキル・待機時間・装備効果そのものは評価しません。
+        </p>
 
         <StatInputs
           title="実機ステータス"
