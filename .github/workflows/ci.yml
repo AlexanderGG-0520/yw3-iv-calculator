@@ -29,3 +29,11 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify crawler policy
+        run: |
+          test -f dist/robots.txt
+          grep -Fq 'User-agent: *' dist/robots.txt
+          grep -Fq 'Allow: /' dist/robots.txt
+          grep -Fq 'name="robots"' dist/index.html
+          grep -Fq 'index, follow' dist/index.html
