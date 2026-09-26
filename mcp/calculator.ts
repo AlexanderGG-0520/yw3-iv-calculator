@@ -327,7 +327,8 @@ function formatReverseResult(
 
 function runReverseSearchWorker(request: SearchInput): Promise<SearchResponse> {
   return new Promise<SearchResponse>((resolve, reject) => {
-    const worker = new Worker(new URL("./reverse-worker.mjs", import.meta.url), {
+    const workerUrl = new URL("./reverse-worker.mjs", import.meta.url);
+    const worker = new Worker(workerUrl, {
       workerData: request,
     });
     let settled = false;

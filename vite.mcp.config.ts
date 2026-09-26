@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   build: {
+    ssr: true,
     target: "node22",
     outDir: "dist-mcp",
     emptyOutDir: true,
