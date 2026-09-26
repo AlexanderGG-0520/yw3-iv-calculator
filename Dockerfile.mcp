@@ -13,8 +13,8 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3001
 
-COPY --from=build --chown=node:node /app/dist-mcp ./dist-mcp
+COPY --from=build --chown=1000:1000 /app/dist-mcp ./dist-mcp
 
-USER node
+USER 1000:1000
 EXPOSE 3001
 CMD ["node", "dist-mcp/server.mjs"]
