@@ -17,7 +17,9 @@ import {
   type StatBlock,
   type StatKey,
 } from "./engine/types";
+import { reverseSearchFingerprint } from "./engine/searchFingerprint";
 import { getYokaiSpecies, YOKAI } from "./engine/yokaiData";
+import { registerWebMcpTools } from "./webmcp";
 
 const statLabel: Record<StatKey, string> = {
   hp: "HP",
@@ -75,7 +77,7 @@ function App() {
   }, [filteredYokai, speciesId]);
 
   const searchFingerprint = useMemo(
-    () => JSON.stringify({
+    () => reverseSearchFingerprint({
       speciesId,
       level,
       rankUps,
@@ -103,6 +105,36 @@ function App() {
       activeWorkerRef.current?.terminate();
       activeWorkerRef.current = null;
     },
+    [],
+  );
+
+  useEffect(
+    () => registerWebMcpTools({
+      onReverseSearch: (input, toolResponse) => {
+        activeWorkerRef.current?.terminate();
+        activeWorkerRef.current = null;
+        setWorking(false);
+        setError("");
+
+        setSpeciesId(input.speciesId);
+        setLevel(input.level);
+        setRankUps(input.rankUps);
+        setObserved(input.observed);
+        setSessions(input.sessions);
+        setEquipment(input.equipment);
+        setScoreProfile(input.scoreProfile);
+        setResponse(toolResponse);
+        setResponseFingerprint(reverseSearchFingerprint(input));
+      },
+      onForwardCalculation: (input) => {
+        setForwardSpeciesId(input.speciesId);
+        setForwardLevel(input.level);
+        setForwardRankUps(input.rankUps);
+        setForwardIv(input.iv);
+        setForwardSessions(input.sessions);
+        setForwardEquipment(input.equipment);
+      },
+    }),
     [],
   );
 
