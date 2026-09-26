@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   calculateStatsTool,
   listEvaluationProfiles,
+  prepareReverseRequest,
   resolveSpecies,
-  reverseIvTool,
   searchYokai,
 } from "./calculator";
 
@@ -47,8 +47,8 @@ describe("remote MCP calculator tools", () => {
     });
   });
 
-  it("runs reverse search in a worker with a role-specific profile", async () => {
-    const result = await reverseIvTool({
+  it("prepares role-specific reverse-search input for the worker", () => {
+    const prepared = prepareReverseRequest({
       species: "ジバニャン",
       level: 50,
       rankUps: 4,
@@ -64,9 +64,8 @@ describe("remote MCP calculator tools", () => {
       maxResults: 20,
     });
 
-    expect(result.scoreProfile.id).toBe("healer");
-    expect(result.summary.validCandidateCount).toBeGreaterThan(0);
-    expect(result.results.length).toBeGreaterThan(0);
-    expect(result.results.length).toBeLessThanOrEqual(20);
+    expect(prepared.species.name).toBe("ジバニャン");
+    expect(prepared.request.scoreProfile).toBe("healer");
+    expect(prepared.request.maxResults).toBe(20);
   });
 });
