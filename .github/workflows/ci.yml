@@ -78,6 +78,27 @@ jobs:
       - name: Build Remote MCP container
         run: docker build --file Dockerfile.mcp --tag yw3-iv-calculator-mcp:test .
 
+      - name: Verify MCP runtime user is numeric and matches Kubernetes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker image inspect yw3-iv-calculator-mcp:test             --format '{{.Config.User}}'             | grep -Fx '1000:1000'
+
+          python - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("infra/kubernetes/app.yaml").read_text()
+          required = [
+              "runAsNonRoot: true",
+              "runAsUser: 1000",
+              "runAsGroup: 1000",
+          ]
+          missing = [entry for entry in required if entry not in manifest]
+          if missing:
+              raise SystemExit("missing MCP securityContext entries: " + ", ".join(missing))
+          PY
+
       - name: Verify crawler policy
         run: |
           test -f dist/robots.txt
