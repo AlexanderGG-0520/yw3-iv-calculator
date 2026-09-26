@@ -164,7 +164,7 @@ export function registerCalculatorTools(server: McpServer): void {
     {
       title: "Reverse-calculate IVs",
       description:
-        "Reverse-calculate and rank Yo-kai Watch 3 IV candidates from observed stats. The search uses the same exact float32 engine and weighted 40-point IV constraint as the website. Choose scoreProfile with list_evaluation_profiles when role-specific ranking is needed.",
+        "Reverse-calculate and rank Yo-kai Watch 3 IV candidates from observed stats. The search runs in an isolated worker thread so heavy searches do not block the MCP HTTP server. Choose scoreProfile with list_evaluation_profiles when role-specific ranking is needed.",
       inputSchema: z.object({
         species: speciesSchema,
         level: z.number().int().min(1).max(99),
@@ -184,7 +184,7 @@ export function registerCalculatorTools(server: McpServer): void {
     },
     async (input) => {
       try {
-        return success(reverseIvTool(input));
+        return success(await reverseIvTool(input));
       } catch (error) {
         return failure(error);
       }

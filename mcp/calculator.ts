@@ -1,3 +1,4 @@
+import { Worker } from "node:worker_threads";
 import {
   calculateStats,
   isValidIvSpread,
@@ -5,7 +6,6 @@ import {
   ivWeightedTotal,
 } from "../src/engine/calculationEngine";
 import { fitnessFromSessions, isValidSportsSessions } from "../src/engine/fitness";
-import { reverseSearch } from "../src/engine/reverseSearch";
 import {
   SCORE_PROFILE_DESCRIPTIONS,
   SCORE_PROFILE_LABELS,
@@ -14,6 +14,7 @@ import {
   STAT_KEYS,
   type ScoreProfileId,
   type SearchInput,
+  type SearchResponse,
   type SportsSessions,
   type StatBlock,
   type YokaiSpecies,
@@ -47,6 +48,8 @@ export const SCORE_PROFILE_IDS = [
   "utility-support",
   "support-healer",
 ] as const satisfies readonly ScoreProfileId[];
+
+const REVERSE_WORKER_TIMEOUT_MS = 30_000;
 
 const zeroBlock = (): StatBlock => ({
   hp: 0,
@@ -122,6 +125,17 @@ function speciesSummary(species: YokaiSpecies) {
   };
 }
 
+function ambiguousSpeciesError(matches: readonly YokaiSpecies[]): Error {
+  const examples = matches
+    .slice(0, 8)
+    .map((entry) => entry.number + ". " + entry.name + " (" + entry.id + ")")
+    .join(", ");
+  return new Error(
+    "species is ambiguous. Specify an exact id or encyclopedia number. Matches include: " +
+      examples,
+  );
+}
+
 export function resolveSpecies(query: string | number): YokaiSpecies {
   if (typeof query === "number") {
     if (!Number.isInteger(query)) {
@@ -137,13 +151,20 @@ export function resolveSpecies(query: string | number): YokaiSpecies {
     throw new TypeError("species must be a non-empty name, id, or number.");
   }
 
-  const exact = YOKAI.find(
-    (entry) =>
-      entry.id.toLowerCase() === normalized ||
-      entry.name.toLowerCase() === normalized ||
-      String(entry.number) === normalized,
+  const byId = YOKAI.find((entry) => entry.id.toLowerCase() === normalized);
+  if (byId) return byId;
+
+  if (/^\d+$/.test(normalized)) {
+    const number = Number(normalized);
+    const byNumber = YOKAI.find((entry) => entry.number === number);
+    if (byNumber) return byNumber;
+  }
+
+  const exactNames = YOKAI.filter(
+    (entry) => entry.name.toLowerCase() === normalized,
   );
-  if (exact) return exact;
+  if (exactNames.length === 1) return exactNames[0];
+  if (exactNames.length > 1) throw ambiguousSpeciesError(exactNames);
 
   const partial = YOKAI.filter(
     (entry) =>
@@ -152,15 +173,7 @@ export function resolveSpecies(query: string | number): YokaiSpecies {
   );
 
   if (partial.length === 1) return partial[0];
-  if (partial.length > 1) {
-    const examples = partial
-      .slice(0, 8)
-      .map((entry) => entry.number + ". " + entry.name + " (" + entry.id + ")")
-      .join(", ");
-    throw new Error(
-      "species is ambiguous. Use search_yokai first. Matches include: " + examples,
-    );
-  }
+  if (partial.length > 1) throw ambiguousSpeciesError(partial);
 
   throw new Error(
     'No Yo-kai matched "' + query + '". Use search_yokai to find the id.',
@@ -249,28 +262,55 @@ export interface ReverseToolInput {
   maxResults?: number;
 }
 
-export function reverseIvTool(input: ReverseToolInput) {
+export interface PreparedReverseRequest {
+  species: ReturnType<typeof speciesSummary>;
+  request: SearchInput;
+}
+
+export interface ReverseToolResult {
+  species: ReturnType<typeof speciesSummary>;
+  level: number;
+  rankUps: number;
+  scoreProfile: {
+    id: ScoreProfileId;
+    label: string;
+    description: string;
+  };
+  sessions: SportsSessions;
+  equipment: StatBlock;
+  summary: SearchResponse["summary"];
+  results: SearchResponse["results"];
+}
+
+export function prepareReverseRequest(input: ReverseToolInput): PreparedReverseRequest {
   const species = resolveSpecies(input.species);
   const maxResults = input.maxResults ?? 20;
   if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 200) {
     throw new RangeError("maxResults must be an integer from 1 through 200.");
   }
 
-  const request: SearchInput = {
-    speciesId: species.id,
-    level: requireLevel(input.level),
-    rankUps: requireRankUps(input.rankUps ?? 0),
-    observed: requireObserved(input.observed),
-    sessions: normalizeSessions(input.sessions),
-    equipment: normalizeEquipment(input.equipment),
-    scoreProfile: requireScoreProfile(input.scoreProfile),
-    maxResults,
-  };
-
-  const response = reverseSearch(request);
-
   return {
     species: speciesSummary(species),
+    request: {
+      speciesId: species.id,
+      level: requireLevel(input.level),
+      rankUps: requireRankUps(input.rankUps ?? 0),
+      observed: requireObserved(input.observed),
+      sessions: normalizeSessions(input.sessions),
+      equipment: normalizeEquipment(input.equipment),
+      scoreProfile: requireScoreProfile(input.scoreProfile),
+      maxResults,
+    },
+  };
+}
+
+function formatReverseResult(
+  prepared: PreparedReverseRequest,
+  response: SearchResponse,
+): ReverseToolResult {
+  const { request, species } = prepared;
+  return {
+    species,
     level: request.level,
     rankUps: request.rankUps,
     scoreProfile: {
@@ -283,4 +323,53 @@ export function reverseIvTool(input: ReverseToolInput) {
     summary: response.summary,
     results: response.results,
   };
+}
+
+function runReverseSearchWorker(request: SearchInput): Promise<SearchResponse> {
+  return new Promise<SearchResponse>((resolve, reject) => {
+    const worker = new Worker(new URL("./reverse-worker.mjs", import.meta.url), {
+      workerData: request,
+    });
+    let settled = false;
+
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      callback();
+    };
+
+    const timeout = setTimeout(() => {
+      finish(() => {
+        void worker.terminate();
+        reject(new Error("reverse_iv worker timed out."));
+      });
+    }, REVERSE_WORKER_TIMEOUT_MS);
+
+    worker.once("message", (message: { ok: true; response: SearchResponse } | { ok: false; error: string }) => {
+      finish(() => {
+        if (message.ok) {
+          resolve(message.response);
+        } else {
+          reject(new Error(message.error));
+        }
+      });
+    });
+
+    worker.once("error", (error) => {
+      finish(() => reject(error));
+    });
+
+    worker.once("exit", (code) => {
+      if (code !== 0) {
+        finish(() => reject(new Error("reverse_iv worker exited with code " + code + ".")));
+      }
+    });
+  });
+}
+
+export async function reverseIvTool(input: ReverseToolInput): Promise<ReverseToolResult> {
+  const prepared = prepareReverseRequest(input);
+  const response = await runReverseSearchWorker(prepared.request);
+  return formatReverseResult(prepared, response);
 }

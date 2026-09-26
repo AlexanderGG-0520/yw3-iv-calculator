@@ -35,7 +35,9 @@ jobs:
         run: npm run build:mcp
 
       - name: Verify Remote MCP bundle
-        run: test -s dist-mcp/server.mjs
+        run: |
+          test -s dist-mcp/server.mjs
+          test -s dist-mcp/reverse-worker.mjs
 
       - name: Smoke-test Remote MCP
         shell: bash
@@ -55,6 +57,23 @@ jobs:
           curl --fail --silent http://127.0.0.1:3001/healthz | grep -Fq 'ok'
 
           curl --fail --silent             -H 'Content-Type: application/json'             -H 'Accept: application/json, text/event-stream'             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"1.0.0"}}}'             http://127.0.0.1:3001/mcp             | grep -Fq 'yw3-iv-calculator'
+
+      - name: Verify health stays responsive during reverse search
+        shell: bash
+        run: |
+          set -euo pipefail
+          MCP_TEST_REVERSE_DELAY_MS=1500 HOST=127.0.0.1 PORT=3001 node dist-mcp/server.mjs > /tmp/yw3-mcp-nonblocking.log 2>&1 &
+          mcp_pid=$!
+          trap 'kill "$mcp_pid" 2>/dev/null || true' EXIT
+
+          for _ in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:3001/healthz > /dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+
+          node scripts/test-mcp-nonblocking.mjs
 
       - name: Build Remote MCP container
         run: docker build --file Dockerfile.mcp --tag yw3-iv-calculator-mcp:test .

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateStatsTool,
   listEvaluationProfiles,
+  resolveSpecies,
   reverseIvTool,
   searchYokai,
 } from "./calculator";
@@ -11,6 +12,14 @@ describe("remote MCP calculator tools", () => {
     const result = searchYokai("ジバニャン", 20);
     expect(result.totalMatches).toBeGreaterThan(0);
     expect(result.matches.some((entry) => entry.name === "ジバニャン")).toBe(true);
+  });
+
+  it("rejects duplicate exact names instead of silently taking the first row", () => {
+    expect(() => resolveSpecies("ＵＳＡ()ピョン")).toThrow(
+      /ambiguous.*423.*424/s,
+    );
+    expect(resolveSpecies(423).number).toBe(423);
+    expect(resolveSpecies("yw3-423").number).toBe(423);
   });
 
   it("publishes all role-based evaluation profiles", () => {
@@ -38,8 +47,8 @@ describe("remote MCP calculator tools", () => {
     });
   });
 
-  it("runs reverse search with a role-specific profile", () => {
-    const result = reverseIvTool({
+  it("runs reverse search in a worker with a role-specific profile", async () => {
+    const result = await reverseIvTool({
       species: "ジバニャン",
       level: 50,
       rankUps: 4,
