@@ -19,9 +19,11 @@ if (Number.isFinite(testDelayMs) && testDelayMs > 0) {
 try {
   const response = reverseSearch(workerData as SearchInput);
   parentPort.postMessage({ ok: true, response });
+  parentPort.close();
 } catch (error) {
   parentPort.postMessage({
     ok: false,
     error: error instanceof Error ? error.message : String(error),
   });
+  parentPort.close();
 }

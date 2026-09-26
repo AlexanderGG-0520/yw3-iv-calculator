@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
+import { getReverseWorkerPoolStats } from "./calculator";
 import { registerCalculatorTools } from "./tools";
 
 const host = process.env.HOST ?? "0.0.0.0";
@@ -27,6 +28,15 @@ const httpServer = createServer((request, response) => {
   if (url.pathname === "/healthz") {
     response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
     response.end("ok\n");
+    return;
+  }
+
+  if (
+    process.env.MCP_TEST_EXPOSE_DEBUG === "1" &&
+    url.pathname === "/_test/reverse-pool"
+  ) {
+    response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify(getReverseWorkerPoolStats()));
     return;
   }
 

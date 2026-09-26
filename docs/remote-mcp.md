@@ -23,6 +23,12 @@ The endpoint uses MCP Streamable HTTP. It is stateless and does not require auth
 
 All tools use the same checked-in species data and calculation modules as the web calculator.
 
+### Availability limits
+
+`reverse_iv` is CPU- and memory-intensive, so the public MCP process allows **one reverse search at a time**. Additional concurrent `reverse_iv` calls are rejected immediately with a busy error and should be retried shortly. No unbounded request queue is kept.
+
+The reverse worker also uses Node `worker_threads.resourceLimits` to cap its V8 heap in addition to the Kubernetes container memory limit.
+
 ## ChatGPT
 
 In ChatGPT developer mode, add a custom MCP/plugin connection whose server URL is:

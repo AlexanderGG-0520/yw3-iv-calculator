@@ -50,6 +50,28 @@ export const SCORE_PROFILE_IDS = [
 ] as const satisfies readonly ScoreProfileId[];
 
 const REVERSE_WORKER_TIMEOUT_MS = 30_000;
+const MAX_CONCURRENT_REVERSE_WORKERS = 1;
+
+let activeReverseWorkers = 0;
+let maxActiveReverseWorkersObserved = 0;
+let rejectedBusyReverseRequests = 0;
+
+export class ReverseSearchBusyError extends Error {
+  constructor() {
+    super("reverse_iv is busy; only one reverse search may run at a time. Retry shortly.");
+    this.name = "ReverseSearchBusyError";
+  }
+}
+
+export function getReverseWorkerPoolStats() {
+  return {
+    active: activeReverseWorkers,
+    queued: 0,
+    maxConcurrent: MAX_CONCURRENT_REVERSE_WORKERS,
+    maxActiveObserved: maxActiveReverseWorkersObserved,
+    rejectedBusy: rejectedBusyReverseRequests,
+  };
+}
 
 const zeroBlock = (): StatBlock => ({
   hp: 0,
@@ -325,15 +347,28 @@ function formatReverseResult(
   };
 }
 
+type ReverseWorkerMessage =
+  | { ok: true; response: SearchResponse }
+  | { ok: false; error: string };
+
 function runReverseSearchWorker(request: SearchInput): Promise<SearchResponse> {
   return new Promise<SearchResponse>((resolve, reject) => {
     const workerUrl = new URL("./reverse-worker.mjs", import.meta.url);
     const worker = new Worker(workerUrl, {
       workerData: request,
+      name: "yw3-reverse-iv",
+      resourceLimits: {
+        maxOldGenerationSizeMb: 32,
+        maxYoungGenerationSizeMb: 8,
+        codeRangeSizeMb: 16,
+        stackSizeMb: 2,
+      },
     });
-    let settled = false;
 
-    const finish = (callback: () => void) => {
+    let settled = false;
+    let result: ReverseWorkerMessage | undefined;
+
+    const settle = (callback: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
@@ -341,36 +376,64 @@ function runReverseSearchWorker(request: SearchInput): Promise<SearchResponse> {
     };
 
     const timeout = setTimeout(() => {
-      finish(() => {
+      settle(() => {
         void worker.terminate();
         reject(new Error("reverse_iv worker timed out."));
       });
     }, REVERSE_WORKER_TIMEOUT_MS);
 
-    worker.once("message", (message: { ok: true; response: SearchResponse } | { ok: false; error: string }) => {
-      finish(() => {
-        if (message.ok) {
-          resolve(message.response);
-        } else {
-          reject(new Error(message.error));
-        }
-      });
+    worker.once("message", (message: ReverseWorkerMessage) => {
+      result = message;
     });
 
     worker.once("error", (error) => {
-      finish(() => reject(error));
+      settle(() => {
+        void worker.terminate();
+        reject(error);
+      });
     });
 
     worker.once("exit", (code) => {
-      if (code !== 0) {
-        finish(() => reject(new Error("reverse_iv worker exited with code " + code + ".")));
-      }
+      settle(() => {
+        if (code !== 0) {
+          reject(new Error("reverse_iv worker exited with code " + code + "."));
+          return;
+        }
+        if (!result) {
+          reject(new Error("reverse_iv worker exited without a result."));
+          return;
+        }
+        if (result.ok) {
+          resolve(result.response);
+        } else {
+          reject(new Error(result.error));
+        }
+      });
     });
   });
 }
 
+async function runReverseSearchBounded(request: SearchInput): Promise<SearchResponse> {
+  if (activeReverseWorkers >= MAX_CONCURRENT_REVERSE_WORKERS) {
+    rejectedBusyReverseRequests += 1;
+    throw new ReverseSearchBusyError();
+  }
+
+  activeReverseWorkers += 1;
+  maxActiveReverseWorkersObserved = Math.max(
+    maxActiveReverseWorkersObserved,
+    activeReverseWorkers,
+  );
+
+  try {
+    return await runReverseSearchWorker(request);
+  } finally {
+    activeReverseWorkers -= 1;
+  }
+}
+
 export async function reverseIvTool(input: ReverseToolInput): Promise<ReverseToolResult> {
   const prepared = prepareReverseRequest(input);
-  const response = await runReverseSearchWorker(prepared.request);
+  const response = await runReverseSearchBounded(prepared.request);
   return formatReverseResult(prepared, response);
 }
