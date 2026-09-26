@@ -38,7 +38,33 @@ spec:
             periodSeconds: 30
           securityContext:
             allowPrivilegeEscalation: false
----
+        - name: mcp
+          image: ghcr.io/alexandergg-0520/yw3-iv-calculator-mcp:main
+          ports:
+            - containerPort: 3001
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+--- 
 apiVersion: v1
 kind: Service
 metadata:
