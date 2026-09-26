@@ -6,6 +6,7 @@ on:
       - main
       - "feat/**"
       - "fix/**"
+      - "mcp/**"
   pull_request:
 
 permissions:
@@ -27,8 +28,14 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build
+      - name: Build frontend
         run: npm run build
+
+      - name: Build Remote MCP
+        run: npm run build:mcp
+
+      - name: Verify Remote MCP bundle
+        run: test -s dist-mcp/server.mjs
 
       - name: Verify crawler policy
         run: |
