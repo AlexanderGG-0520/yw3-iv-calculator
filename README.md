@@ -107,3 +107,15 @@ Application自体はclusterへ一度bootstrapする必要があります。そ�
 ## License
 
 プロジェクト独自のコードは [MIT License](LICENSE) です。外部資料・データの出典は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) と [docs/source-notes.md](docs/source-notes.md) を参照してください。
+
+## AI / WebMCP site tools
+
+When the browser exposes the proposed WebMCP API, the page registers four structured site tools in addition to the normal human UI:
+
+- `search_yokai`: search the built-in species table
+- `list_evaluation_profiles`: inspect the supported IV ranking roles
+- `calculate_stats`: run forward stat calculation and reflect the inputs in the visible UI
+- `reverse_iv`: run IV reverse search/ranking and reflect the result in the visible UI
+
+Browsers without WebMCP support continue to use the normal calculator unchanged. The site tools are local calculator actions: they do not require an account and do not perform consequential real-world operations.
+
