@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/alexandergg-0520/yw3-iv-calculator:072c4ae4ec56dfbb970b0bb1ecd40b54c1cb3d30
+          image: ghcr.io/alexandergg-0520/yw3-iv-calculator:21306ecad363dd2b6daf31b2fb0b2cf46d9e6431
           ports:
             - containerPort: 80
           resources:
@@ -39,7 +39,7 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
         - name: mcp
-          image: ghcr.io/alexandergg-0520/yw3-iv-calculator-mcp:072c4ae4ec56dfbb970b0bb1ecd40b54c1cb3d30
+          image: ghcr.io/alexandergg-0520/yw3-iv-calculator-mcp:21306ecad363dd2b6daf31b2fb0b2cf46d9e6431
           ports:
             - containerPort: 3001
           resources:
